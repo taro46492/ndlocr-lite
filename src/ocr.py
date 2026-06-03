@@ -627,7 +627,7 @@ def process(args):
             c_idx = classeslist.index(type_str) if type_str in classeslist else 1
 
             jsonobj={"boundingBox": [[xmin,ymin],[xmin,ymin+line_h],[xmin+line_w,ymin],[xmin+line_w,ymin+line_h]],
-                "id": idx,"isVertical": "true","text": resultlinesall[idx],"isTextline": "true","confidence": conf, "class_index": c_idx}
+                "id": idx,"isVertical": "true" if line_h > line_w else "false","text": resultlinesall[idx],"isTextline": "true","confidence": conf, "class_index": c_idx}
             resjsonarray.append(jsonobj)
 
         allxmlstr+=(ET.tostring(root.find("PAGE"), encoding='unicode')+"\n")
