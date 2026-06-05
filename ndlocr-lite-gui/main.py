@@ -5,7 +5,8 @@ from typing import List, Dict, Tuple
 import sys
 import os
 import numpy as np
-from PIL import Image, ImageGrab
+from PIL import Image, ImageFile, ImageGrab
+ImageFile.MAXBLOCK = 1024 * 1024 * 128
 from pathlib import Path
 
 sys.path.append(os.path.join('.', 'src'))
@@ -797,7 +798,14 @@ def main(page: ft.Page):
             c = canvas.Canvas(outputpath, pagesize=(page_w, page_h))
 
             pilimg_data = io.BytesIO()
-            Image.fromarray(img).save(pilimg_data, format='PNG')
+            pilimg=Image.fromarray(img)
+            if pilimg.mode in ("RGBA", "LA", "P"):
+                pilimg = pilimg.convert("RGB")
+            #Image.fromarray(img).save(pilimg_data, format='PNG')
+            try:
+                pilimg.save(pilimg_data, format='JPEG')
+            except:
+                pilimg.save(pilimg_data, format='PNG')
             pilimg_data.seek(0)
 
             c.drawImage(
