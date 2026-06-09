@@ -213,7 +213,7 @@ def _run_ocr_on_image_array(
                 continue
             line_elem = ET.SubElement(page, "LINE")
             c_idx = int(det["class_index"])
-            type_name = classeslist[c_idx] if c_idx < len(classeslist) else "本文"
+            type_name = "本文"
             line_elem.set("TYPE", type_name)
             line_elem.set("X", str(int(xmin)))
             line_elem.set("Y", str(int(ymin)))
@@ -589,7 +589,7 @@ def process(args):
                 if line_w > 0 and line_h > 0:
                     line_elem = ET.SubElement(page, "LINE")
                     c_idx = int(det["class_index"])
-                    type_name = classeslist[c_idx] if c_idx < len(classeslist) else "本文"
+                    type_name = "本文"
                     line_elem.set("TYPE", type_name)
                     line_elem.set("X", str(int(xmin)))
                     line_elem.set("Y", str(int(ymin)))
