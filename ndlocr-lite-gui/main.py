@@ -17,6 +17,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import json
 import shutil
+import threading
 import argparse
 import yaml
 import io
@@ -778,6 +779,7 @@ def main(page: ft.Page):
         inputpathlist = []
         visualizepathlist = []
         outputtxtlist = []
+        ocr_cancel_event=threading.Event()
         pdf_job_list = []
 
         def create_pdf_func(outputpath: str, img: object, bboxlistobj: list, viztxtflag: bool, resolution: int = 300):
@@ -876,7 +878,7 @@ def main(page: ft.Page):
             finally:
                 doc.close()
 
-        def parts_control(flag: bool):
+        def parts_control(flag:bool,allow_ocr_cancel:bool=False):
             file_upload_btn.disabled = flag
             directory_upload_btn.disabled = flag
             directory_output_btn.disabled = flag
@@ -888,6 +890,7 @@ def main(page: ft.Page):
             crop_btn.disabled = flag
             cap_btn.disabled = flag
             localebutton.disabled = flag
+            stop_ocr_btn.disabled=not (flag and allow_ocr_cancel)
 
         def process_pdf_with_original_layer(pdf_path: str, outputpath: str, alljsonobjlist: list, pdf_outpath_list: list, allsum: int):
             pdf_path_obj = Path(pdf_path)
@@ -995,8 +998,16 @@ def main(page: ft.Page):
                 )
                 pdf_outpath_list.append(output_pdf)
 
+        def request_ocr_cancel(e):
+            if ocr_cancel_event.is_set():
+                return
+            ocr_cancel_event.set()
+            stop_ocr_btn.disabled=True
+            progressmessage.value=TRANSLATIONS["main_ocr_cancel_requested"][config_obj["langcode"]]
+            page.update()
 
         def ocr_button_result(e):
+            ocr_cancel_event.clear()
             progressbar.value = 0
             outputpath = selected_output_path.value
             nonlocal inputpathlist, outputtxtlist, visualizepathlist, preview_index, args
@@ -1009,7 +1020,7 @@ def main(page: ft.Page):
                 return
 
             preview_index = 0
-            parts_control(True)
+            parts_control(True,allow_ocr_cancel=True)
             page.update()
             progressmessage.value = 'Start'
             progressmessage.update()
@@ -1022,7 +1033,8 @@ def main(page: ft.Page):
                 visualizepathlist.clear()
                 alljsonobjlist = []
                 pdf_outpath_list = []
-
+                completed_count=0
+                cancelled=False
                 standalone_inputpathlist = [p for p in inputpathlist if not is_pdf_tmp_path(p)]
 
                 allsum = len(standalone_inputpathlist)
@@ -1043,6 +1055,9 @@ def main(page: ft.Page):
                     process_pdf_with_original_layer(pdf_path, outputpath, alljsonobjlist, pdf_outpath_list, allsum)
 
                 for idx, inputpath in enumerate(standalone_inputpathlist):
+                    if ocr_cancel_event.is_set():
+                        cancelled=True
+                        break
                     progressmessage.value = inputpath
                     progressmessage.update()
                     pil_image = Image.open(inputpath).convert('RGB')
@@ -1110,6 +1125,7 @@ def main(page: ft.Page):
                         pdf_outpath_list.append(pdf_outpath)
 
                     print('Total calculation time (Detection + Recognition):', time.time() - start)
+                    completed_count+=1
                     progressbar.value += 1 / max(allsum, 1)
                     preview_prev_btn.disabled = False
                     preview_next_btn.disabled = False
@@ -1123,14 +1139,19 @@ def main(page: ft.Page):
                         current_visualizeimgname.value = os.path.basename(inputpathlist[min(preview_index, len(inputpathlist) - 1)])
                     preview_image.update()
                     page.update()
-
-                if config_obj['langcode'] == 'ja':
+                    if cancelled:
+                        break
+                if cancelled:
+                    progressmessage.value=TRANSLATIONS["main_ocr_cancelled"][config_obj["langcode"]].format(
+                        completed=completed_count,total=allsum,elapsed=time.time()-allstart
+                    )
+                elif config_obj['langcode'] == 'ja':
                     progressmessage.value = '{} 件OCR完了 / 所要時間 {:.2f} 秒'.format(allsum, time.time() - allstart)
                 else:
                     progressmessage.value = '{} items completed / Total time {:.2f} sec'.format(allsum, time.time() - allstart)
                 progressmessage.update()
 
-                if chkbx_tei.value and alljsonobjlist:
+                if chkbx_tei.value and len(alljsonobjlist)>0:
                     with open(os.path.join(outputpath, os.path.splitext(os.path.basename(inputpathlist[0]))[0] + '_tei.xml'), 'wb') as wf:
                         allxmlstrtei = convert_tei(alljsonobjlist)
                         wf.write(allxmlstrtei)
@@ -1173,6 +1194,7 @@ def main(page: ft.Page):
                 progressmessage.value = str(e)
                 progressmessage.update()
             finally:
+                ocr_cancel_event.clear()
                 parts_control(False)
                 page.update()
 
@@ -1409,6 +1431,10 @@ def main(page: ft.Page):
             ),
             disabled=True,
         )
+        stop_ocr_btn=ft.ElevatedButton(
+            text=TRANSLATIONS["main_stop_ocr_btn"][config_obj["langcode"]],
+            on_click=request_ocr_cancel,
+            disabled=True)
         preview_image_col = ft.Column(
             controls=[preview_image],
             width=400,
@@ -1526,6 +1552,7 @@ def main(page: ft.Page):
             ft.Divider(),
             ft.Row([
                 ocr_btn,
+                stop_ocr_btn,
                 crop_btn,
                 ft.Column([chkbx_visualize, customize_btn]),
                 ft.Column([progressmessage, progressbar]),
