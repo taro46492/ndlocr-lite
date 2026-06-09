@@ -32,7 +32,7 @@ jobs:
           - runs-on: macos-15-intel
             binary-name: ndlocr_lite_v${{github.ref_name}}_macos_intel.tar.gz
             target-platform: macos
-          - runs-on: windows-latest
+          - runs-on: windows-2022
             binary-name: ndlocr_lite_v${{github.ref_name}}_windows.zip
             target-platform: windows
     runs-on: ${{ matrix.runs-on }}
